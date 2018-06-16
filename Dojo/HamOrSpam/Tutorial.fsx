@@ -62,12 +62,20 @@ they are considered Spam?
 let ham_20 = 
     trainingSample
     |> Array.filter (fun (cl, txt) -> cl = Ham)
-    |> Seq.take 20
-    |> Seq.iter (fun (cl, txt) -> printfn "%s" txt)
+    |> Array.take 20
+
+ham_20
+|> Array.iter (fun (cl, txt) -> printfn "%s" txt)
 
 
 // TODO: DISPLAY 20 FIRST SPAM SMS
+let spam_20 = 
+    trainingSample
+    |> Array.filter (fun (cl, txt) -> cl = Spam)
+    |> Array.take 20
 
+spam_20
+|> Array.iter (fun (cl, txt) -> printfn "%s" txt)
 
 
 (* **********************************************
@@ -85,10 +93,14 @@ Proba(SMS is Spam) = count(Spam SMS) / count(SMS)
 
 
 // let's split the sample into ham vs. spam:
-let ham, spam = trainingSample |> Array.partition (fun (cl,txt) -> cl = Ham)
+let ham, spam =
+    trainingSample
+    |> Array.partition (fun (cl,txt) -> cl = Ham)
 
 
 // TODO: COMPUTE PROBABILITY OF HAM, SPAM
+let pHam = float (Array.length ham) / float (Array.length trainingSample)
+let pSpam = float (Array.length spam) / float (Array.length trainingSample)
 
 
 
@@ -121,7 +133,7 @@ let containsToken (token:string) (txt:string) =
 // THIS IS WHERE YOU WORK YOUR MAGIC...
 let hamOrSpamIfContains (sample:(Class*string)[]) (token:string) =
     // split the sample in ham vs. spam
-    let ham,spam = 
+    let ham, spam = 
         sample 
         |> Array.partition (fun (cl,txt) -> cl = Ham)
     
@@ -134,11 +146,11 @@ let hamOrSpamIfContains (sample:(Class*string)[]) (token:string) =
 
     // TODO FIX THIS SECTION!
 
-    let pHam = 0. // TODO: FIX, THIS IS INCORRECT!
-    let pHamContainsToken = 0. // TODO: FIX, THIS IS INCORRECT!
+    let pHam = float (Array.length ham) / float (Array.length sample)
+    let pHamContainsToken = pHam / pToken
 
-    let pSpam = 1. - pHam 
-    let pSpamContainsToken = 0. // TODO: FIX, THIS IS INCORRECT!
+    let pSpam = float (Array.length spam) / float (Array.length sample)
+    let pSpamContainsToken = pSpam / pToken
 
     // ... and enjoy the results of your hard labor:
     // this is the application of Bayes' Theorem
@@ -151,7 +163,10 @@ let hamOrSpamIfContains (sample:(Class*string)[]) (token:string) =
 
 // TODO: PROBA THAT MESSAGE IS HAM OR SPAM
 // IF CONTAINS "ring", "800", "chat", "text" ...
-
+hamOrSpamIfContains trainingSample "ring"
+hamOrSpamIfContains trainingSample "800"
+hamOrSpamIfContains trainingSample "chat"
+hamOrSpamIfContains trainingSample "text"
 
 
 (* **********************************************
@@ -188,7 +203,7 @@ validationSample.[0..19]
 // Let's compute the % correctly classified;
 // not too shabby for a model using only 6 semi-random words!
 validationSample
-|> Seq.averageBy (fun (cl,txt) -> if cl = demoClassifier txt then 1. else 0.)
+|> Array.averageBy (fun (cl,txt) -> if cl = demoClassifier txt then 1.0 else 0.0)
 |> printfn "Correct: %.4f"
 
 
@@ -213,13 +228,29 @@ let frequency = bagOfWords (prepare trainingSample) tokens
 // into a sequence of tuples (a,b), which can
 // then be sorted using Seq.sortBy
 let mostFrequent =
-    let topHam = [| "this"; "is"; "ham"; |] // TODO: FIX THIS!
+    let topHam =
+        frequency
+        |> Map.toSeq
+        |> Seq.filter (fun (token, frequency) -> Array.exists (fun (cl,txt) -> containsToken token txt) ham)
+        |> Seq.sortBy (fun (token, frequency) -> frequency)
+        |> Seq.map (fun (token, frequency) -> token)
+        |> Seq.take 10
+        |> Seq.toArray
     printfn "Most frequent in Ham"
-    topHam |> Array.iter (printfn "%s")
+    topHam
+    |> Array.iter (printfn "%s")
 
-    let topSpam = [| "this"; "is"; "spam" |] // TODO: FIX THIS!
+    let topSpam =
+        frequency
+        |> Map.toSeq
+        |> Seq.filter (fun (token, frequency) -> Array.exists (fun (cl,txt) -> containsToken token txt) spam)
+        |> Seq.sortBy (fun (token, frequency) -> frequency)
+        |> Seq.map (fun (token, frequency) -> token)
+        |> Seq.take 10
+        |> Seq.toArray
     printfn "Most frequent in Spam"
-    topSpam |> Array.iter (printfn "%s")
+    topSpam
+    |> Array.iter (printfn "%s")
 
 
 
@@ -238,17 +269,39 @@ the stop words, and check our top tokens again.
 // http://www.textfixer.com/resources/common-english-words.txt
 let stopWords = 
     let asString = "a,able,about,across,after,all,almost,also,am,among,an,and,any,are,as,at,be,because,been,but,by,can,cannot,could,dear,did,do,does,either,else,ever,every,for,from,get,got,had,has,have,he,her,hers,him,his,how,however,i,if,in,into,is,it,its,just,least,let,like,likely,may,me,might,most,must,my,neither,no,nor,not,of,off,often,on,only,or,other,our,own,rather,said,say,says,she,should,since,so,some,than,that,the,their,them,then,there,these,they,this,tis,to,too,twas,us,wants,was,we,were,what,when,where,which,while,who,whom,why,will,with,would,yet,you,your"
-    asString.Split(',') |> Set.ofArray
+    asString.Split(',')
+    |> Set.ofArray
 
 
 
 // TODO: CLEAN TOKENS = TOKENS - STOP WORDS
-
+let cleanTokens = tokens - stopWords
 
 // TODO, AGAIN: MOST FREQUENT TOKENS IN HAM, SPAM?
+let cleanFrequency = bagOfWords (prepare trainingSample) cleanTokens
 
-let frequentHamTokens = Set.empty // TODO: FIX THIS
-let frequentSpamTokens = Set.empty // TODO: FIX THIS
+let frequentHamTokens =
+        cleanFrequency
+        |> Map.toSeq
+        |> Seq.filter (fun (token, frequency) -> Array.exists (fun (cl,txt) -> containsToken token txt) ham)
+        |> Seq.sortBy (fun (token, frequency) -> frequency)
+        |> Seq.map (fun (token, frequency) -> token)
+        |> Seq.take 10
+        |> Set.ofSeq
+printfn "Most frequent in Ham"
+frequentHamTokens
+|> Seq.iter (printfn "%s")
+let frequentSpamTokens =
+        cleanFrequency
+        |> Map.toSeq
+        |> Seq.filter (fun (token, frequency) -> Array.exists (fun (cl,txt) -> containsToken token txt) spam)
+        |> Seq.sortBy (fun (token, frequency) -> frequency)
+        |> Seq.map (fun (token, frequency) -> token)
+        |> Seq.take 10
+        |> Set.ofSeq
+printfn "Most frequent in Spam"
+frequentSpamTokens
+|> Seq.iter (printfn "%s")
 
 
 
@@ -264,13 +317,15 @@ to start with, let's train a classifier.
 // TODO: PICK TOP 10 SPAM + TOP 10 HAM "CLEAN" TOKENS,
 // AND TRAIN CLASSIFIER WITH THESE TOKENS
 
-let betterTokens = Set.empty // THIS IS NOT RIGHT
+let betterTokens = frequentHamTokens + frequentSpamTokens
 // train a classifier using a sample and tokens
 let betterClassifier = classifier bagOfWords trainingSample betterTokens
 
 
 // TODO: COMPUTE % CORRECTLY CLASSIFIED ON VALIDATION SET
-
+validationSample
+|> Array.averageBy (fun (cl,txt) -> if cl = betterClassifier txt then 1.0 else 0.0)
+|> printfn "Correct: %.4f"
 
 
 (* **********************************************
@@ -284,7 +339,9 @@ Can we make them into a feature / token?
 
 let numbersRegex = Regex(@"\d{3,}")
 let replaceNumbers (text: string) = numbersRegex.Replace(text, "__number__")
-let exampleReplacement = "Call 1800123456 for your free spam" |> replaceNumbers
+let exampleReplacement = 
+    "Call 1800123456 for your free spam"
+    |> replaceNumbers
 
 
 
@@ -293,16 +350,23 @@ let exampleReplacement = "Call 1800123456 for your free spam" |> replaceNumbers
 
 
 
-let training = trainingSample // THIS IS NOT RIGHT
-let validation = validationSample // THIS IS NOT RIGHT
+let training = 
+    trainingSample
+    |> Array.map (fun (cl, text) -> (cl, replaceNumbers text))
+let validation =
+    validationSample
+    |> Array.map (fun (cl, text) -> (cl, replaceNumbers text))
 
 
 
 // TODO: TRAIN A CLASSIFIER ON PRE-PROCESSED
 // TRAINING SET, AND EVALUATE QUALITY BY
 // COMPUTING % CORRECTLY CLASSIFIED ON VALIDATION SET
+let processedClassifier = classifier bagOfWords training betterTokens
 
-
+validation
+|> Array.averageBy (fun (cl,txt) -> if cl = processedClassifier txt then 1.0 else 0.0)
+|> printfn "Correct: %.4f"
 
 
 (* **********************************************
